@@ -77,6 +77,8 @@
     "utf-8-validate"
   ],
   "dependencies": {
+    "@elizaos/plugin-openai": "^1.0.10",
+    "@elizaos/plugin-telegram": "^1.0.10",
     "helmet": "^8.1.0"
   }
 }
