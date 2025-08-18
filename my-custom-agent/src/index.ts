@@ -6,13 +6,20 @@ import { ProjectStarterTestSuite } from './__tests__/e2e/project-starter.e2e.ts'
 const initCharacter = ({ runtime }: { runtime: IAgentRuntime }) => {
   logger.info('Initializing character');
   logger.info({ name: character.name }, 'Name:');
+
+  // Optional visibility: confirm whether requests will include X-MBX-APIKEY
+  if (process.env.BINANCE_API_KEY) {
+    logger.info('BINANCE_API_KEY detected (requests will include X-MBX-APIKEY).');
+  } else {
+    logger.warn('BINANCE_API_KEY not set; using public endpoints only.');
+  }
 };
 
 export const projectAgent: ProjectAgent = {
   character,
   init: async (runtime: IAgentRuntime) => await initCharacter({ runtime }),
-  // plugins: [starterPlugin], <-- Import custom plugins here
-  tests: [ProjectStarterTestSuite], // Export tests from ProjectAgent
+  plugins: [starterPlugin], // your custom plugin (with PRICE_BINANCE + guards)
+  tests: [ProjectStarterTestSuite],
 };
 
 const project: Project = {
@@ -20,5 +27,4 @@ const project: Project = {
 };
 
 export { character } from './character.ts';
-
 export default project;

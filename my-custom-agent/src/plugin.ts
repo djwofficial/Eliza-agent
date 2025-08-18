@@ -1,13 +1,12 @@
 import type { Plugin } from '@elizaos/core';
+import { PRICE_BINANCE } from './priceBinance';
 import {
   type Action,
   type ActionResult,
   type Content,
-  type GenerateTextParams,
   type HandlerCallback,
   type IAgentRuntime,
   type Memory,
-  ModelType,
   type Provider,
   type ProviderResult,
   Service,
@@ -15,6 +14,10 @@ import {
   logger,
 } from '@elizaos/core';
 import { z } from 'zod';
+
+const isPriceQuery = (text?: string) =>
+  /\b(price|harga|rate|btc|bitcoin|eth|ethereum|sol|bnb|xrp|ada|doge|dogecoin|matic)\b/i
+    .test(text ?? "");
 
 /**
  * Define the configuration schema for the plugin with the following properties:
@@ -37,27 +40,17 @@ const configSchema = z.object({
 
 /**
  * Example HelloWorld action
- * This demonstrates the simplest possible action structure
- */
-/**
- * Represents an action that responds with a simple hello world message.
- *
- * @typedef {Object} Action
- * @property {string} name - The name of the action
- * @property {string[]} similes - The related similes of the action
- * @property {string} description - Description of the action
- * @property {Function} validate - Validation function for the action
- * @property {Function} handler - The function that handles the action
- * @property {Object[]} examples - Array of examples for the action
  */
 const helloWorldAction: Action = {
   name: 'HELLO_WORLD',
   similes: ['GREET', 'SAY_HELLO'],
   description: 'Responds with a simple hello world message',
 
-  validate: async (_runtime: IAgentRuntime, _message: Memory, _state: State): Promise<boolean> => {
-    // Always valid
-    return true;
+  // ✅ Do NOT trigger on price queries; only greet-y texts
+  validate: async (_runtime: IAgentRuntime, message: Memory): Promise<boolean> => {
+    const t = message.content?.text ?? '';
+    if (isPriceQuery(t)) return false;
+    return /\b(hi|hello|hey|help|start)\b/i.test(t);
   },
 
   handler: async (
@@ -71,22 +64,17 @@ const helloWorldAction: Action = {
     try {
       logger.info('Handling HELLO_WORLD action');
 
-      // Simple response content
       const responseContent: Content = {
         text: 'hello world!',
         actions: ['HELLO_WORLD'],
         source: message.content.source,
       };
 
-      // Call back with the hello world message
       await callback(responseContent);
 
       return {
         text: 'Sent hello world greeting',
-        values: {
-          success: true,
-          greeted: true,
-        },
+        values: { success: true, greeted: true },
         data: {
           actionName: 'HELLO_WORLD',
           messageId: message.id,
@@ -96,13 +84,9 @@ const helloWorldAction: Action = {
       };
     } catch (error) {
       logger.error({ error }, 'Error in HELLO_WORLD action:');
-
       return {
         text: 'Failed to send hello world greeting',
-        values: {
-          success: false,
-          error: 'GREETING_FAILED',
-        },
+        values: { success: false, error: 'GREETING_FAILED' },
         data: {
           actionName: 'HELLO_WORLD',
           error: error instanceof Error ? error.message : String(error),
@@ -115,26 +99,15 @@ const helloWorldAction: Action = {
 
   examples: [
     [
-      {
-        name: '{{name1}}',
-        content: {
-          text: 'Can you say hello?',
-        },
-      },
-      {
-        name: '{{name2}}',
-        content: {
-          text: 'hello world!',
-          actions: ['HELLO_WORLD'],
-        },
-      },
+      { name: '{{name1}}', content: { text: 'Can you say hello?' } },
+      { name: '{{name2}}', content: { text: 'hello world!', actions: ['HELLO_WORLD'] } },
     ],
   ],
 };
 
 /**
  * Example Hello World Provider
- * This demonstrates the simplest possible provider implementation
+ * (returns nothing on price queries)
  */
 const helloWorldProvider: Provider = {
   name: 'HELLO_WORLD_PROVIDER',
@@ -142,14 +115,15 @@ const helloWorldProvider: Provider = {
 
   get: async (
     _runtime: IAgentRuntime,
-    _message: Memory,
+    message: Memory,
     _state: State
   ): Promise<ProviderResult> => {
-    return {
-      text: 'I am a provider',
-      values: {},
-      data: {},
-    };
+    const t = message.content?.text ?? '';
+    if (isPriceQuery(t)) {
+      // ✅ Don’t add any text for price messages
+      return { text: '', values: {}, data: {} };
+    }
+    return { text: 'I am a provider', values: {}, data: {} };
   },
 };
 
@@ -170,11 +144,8 @@ export class StarterService extends Service {
 
   static async stop(runtime: IAgentRuntime) {
     logger.info('*** Stopping starter service ***');
-    // get the service from the runtime
     const service = runtime.getService(StarterService.serviceType);
-    if (!service) {
-      throw new Error('Starter service not found');
-    }
+    if (!service) throw new Error('Starter service not found');
     service.stop();
   }
 
@@ -195,8 +166,6 @@ const plugin: Plugin = {
     logger.info('*** Initializing starter plugin ***');
     try {
       const validatedConfig = await configSchema.parseAsync(config);
-
-      // Set all environment variables at once
       for (const [key, value] of Object.entries(validatedConfig)) {
         if (value) process.env[key] = value;
       }
@@ -209,72 +178,53 @@ const plugin: Plugin = {
       throw error;
     }
   },
-  models: {
-    [ModelType.TEXT_SMALL]: async (
-      _runtime,
-      { prompt, stopSequences = [] }: GenerateTextParams
-    ) => {
-      return 'Never gonna give you up, never gonna let you down, never gonna run around and desert you...';
-    },
-    [ModelType.TEXT_LARGE]: async (
-      _runtime,
-      {
-        prompt,
-        stopSequences = [],
-        maxTokens = 8192,
-        temperature = 0.7,
-        frequencyPenalty = 0.7,
-        presencePenalty = 0.7,
-      }: GenerateTextParams
-    ) => {
-      return 'Never gonna make you cry, never gonna say goodbye, never gonna tell a lie and hurt you...';
-    },
-  },
+
+  // ✅ Do not override models; prevents LLM from fabricating price lines
+  models: {},
+
   routes: [
     {
       name: 'helloworld',
       path: '/helloworld',
       type: 'GET',
       handler: async (_req: any, res: any) => {
-        // send a response
-        res.json({
-          message: 'Hello World!',
-        });
+        res.json({ message: 'Hello World!' });
       },
     },
   ],
+
   events: {
     MESSAGE_RECEIVED: [
       async (params) => {
         logger.info('MESSAGE_RECEIVED event received');
-        // print the keys
         logger.info({ keys: Object.keys(params) }, 'MESSAGE_RECEIVED param keys');
       },
     ],
     VOICE_MESSAGE_RECEIVED: [
       async (params) => {
         logger.info('VOICE_MESSAGE_RECEIVED event received');
-        // print the keys
         logger.info({ keys: Object.keys(params) }, 'VOICE_MESSAGE_RECEIVED param keys');
       },
     ],
     WORLD_CONNECTED: [
       async (params) => {
         logger.info('WORLD_CONNECTED event received');
-        // print the keys
         logger.info({ keys: Object.keys(params) }, 'WORLD_CONNECTED param keys');
       },
     ],
     WORLD_JOINED: [
       async (params) => {
         logger.info('WORLD_JOINED event received');
-        // print the keys
         logger.info({ keys: Object.keys(params) }, 'WORLD_JOINED param keys');
       },
     ],
   },
+
   services: [StarterService],
-  actions: [helloWorldAction],
+
+  // (Order is fine; PRICE_BINANCE first is a tiny preference)
+  actions: [PRICE_BINANCE, helloWorldAction],
+
   providers: [helloWorldProvider],
 };
 

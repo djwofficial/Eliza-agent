@@ -29,6 +29,7 @@
   "dependencies": {
     "@elizaos/cli": "latest",
     "@elizaos/core": "latest",
+    "@elizaos/plugin-binance": "1.0.0",
     "@elizaos/plugin-bootstrap": "latest",
     "@elizaos/plugin-openai": "^1.0.10",
     "@elizaos/plugin-sql": "latest",
