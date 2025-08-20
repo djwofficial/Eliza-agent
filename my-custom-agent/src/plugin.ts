@@ -1,5 +1,7 @@
 import type { Plugin } from '@elizaos/core';
 import { PRICE_BINANCE } from './priceBinance';
+import { CRYPTO_STATS } from './cryptoStats';
+
 import {
   type Action,
   type ActionResult,
@@ -104,6 +106,7 @@ const helloWorldAction: Action = {
     ],
   ],
 };
+
 
 /**
  * Example Hello World Provider
@@ -223,7 +226,7 @@ const plugin: Plugin = {
   services: [StarterService],
 
   // (Order is fine; PRICE_BINANCE first is a tiny preference)
-  actions: [PRICE_BINANCE, helloWorldAction],
+  actions: [PRICE_BINANCE, CRYPTO_STATS, helloWorldAction],
 
   providers: [helloWorldProvider],
 };
